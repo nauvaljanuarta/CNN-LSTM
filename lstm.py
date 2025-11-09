@@ -12,11 +12,10 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
 import os
 
-print("🚀 MEMUAT DATA UCI HAR DATASET...")
+print("MEMUAT DATA UCI HAR DATASET...")
 
 # 1. LOAD DATA
 def load_har_data():
-    """Load dataset UCI HAR"""
     try:
         # Load training data
         X_train = pd.read_csv('UCI HAR Dataset/train/X_train.txt', delim_whitespace=True, header=None)
@@ -42,37 +41,59 @@ X_train, y_train, X_test, y_test, activity_labels = load_har_data()
 if X_train is None:
     exit()
 
-# 2. CEK DATA
+# 2. data checking
 print("\n📊 DATA EXPLORATION:")
 print(f"X_train shape: {X_train.shape}")
 print(f"y_train shape: {y_train.shape}")
 print(f"X_test shape: {X_test.shape}")
 print(f"y_test shape: {y_test.shape}")
 
-print("\n🎯 ACTIVITY LABELS:")
+print("\n ACTIVITY LABELS:")
 for i, label in activity_labels.iterrows():
     print(f"  {label[0]}: {label[1]}")
 
-print("\n📈 LABEL DISTRIBUTION:")
+print("\n LABEL DISTRIBUTION:")
 print("Training:")
 print(y_train[0].value_counts().sort_index())
 print("\nTesting:")
 print(y_test[0].value_counts().sort_index())
 
-# 3. PREPROCESSING
-print("\n🔧 PREPROCESSING DATA...")
+# 3. preprosesing data 
+print("\n PREPROCESSING DATA...")
 
 # Normalisasi
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
-# Reshape untuk LSTM (samples, timesteps, features)
-X_train_reshaped = X_train_scaled.reshape(X_train_scaled.shape[0], 1, X_train_scaled.shape[1])
+# augmentasi data 
+print("\n🧩 MENAMBAHKAN AUGMENTASI DATA...")
+# menambahkan noise
+def jitter(X, noise_level=0.01):
+    return X + np.random.normal(loc=0.0, scale=noise_level, size=X.shape)
+# mengubah skala
+def scaling(X, scale=0.1):
+    factor = np.random.normal(1.0, scale, (X.shape[0], 1))
+    return X * factor
+
+# Buat versi augmentasi dari data training
+X_train_jitter = jitter(X_train_scaled)
+X_train_scaling = scaling(X_train_scaled)
+
+# Gabungkan data asli + augmentasi
+X_train_aug = np.vstack([X_train_scaled, X_train_jitter, X_train_scaling])
+y_train_aug = np.hstack([y_train[0], y_train[0], y_train[0]])
+
+print(f"✅ Data augmented: dari {X_train_scaled.shape[0]} jadi {X_train_aug.shape[0]} sampel")
+
+# Reshape untuk LSTM
+# yang aug itu untuk data training, untuk data testing tetap normal
+X_train_reshaped = X_train_aug.reshape(X_train_aug.shape[0], 1, X_train_aug.shape[1])
 X_test_reshaped = X_test_scaled.reshape(X_test_scaled.shape[0], 1, X_test_scaled.shape[1])
 
+
 # Encode labels (1-6 menjadi 0-5)
-y_train_encoded = y_train[0] - 1
+y_train_encoded = y_train_aug - 1
 y_test_encoded = y_test[0] - 1
 
 print(f"✅ Data reshaped: {X_train_reshaped.shape}")
@@ -94,14 +115,14 @@ X_test_final, X_val_final, y_test_final, y_val_final = train_test_split(
     X_temp, y_temp, test_size=1/3, random_state=42, stratify=y_temp
 )
 
-print("✅ FINAL DATA SPLIT:")
+print(" FINAL DATA SPLIT:")
 total_samples = len(X_all)
 print(f"Training: {len(X_train_final)} samples ({len(X_train_final)/total_samples*100:.1f}%)")
 print(f"Validation: {len(X_val_final)} samples ({len(X_val_final)/total_samples*100:.1f}%)")
 print(f"Testing: {len(X_test_final)} samples ({len(X_test_final)/total_samples*100:.1f}%)")
 
 # 5. BUILD LSTM MODEL
-print("\n🧠 BUILDING LSTM MODEL...")
+print("\n BUILDING LSTM MODEL...")
 
 model = Sequential([
     LSTM(128, input_shape=(X_train_final.shape[1], X_train_final.shape[2]), 
@@ -120,11 +141,11 @@ model.compile(
     metrics=['accuracy']
 )
 
-print("✅ Model compiled!")
+print(" Model compiled!")
 model.summary()
 
 # 6. TRAINING
-print("\n🎯 TRAINING MODEL...")
+print("\nTRAINING MODEL...")
 
 early_stop = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
 
